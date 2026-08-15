@@ -296,7 +296,7 @@
 
     <!-- JavaScript Animations & Interactivity -->
     <script>
-        // --- 1. Slower Falling Binary Matrix with Trail Decay & Cursor Displacement ---
+        // --- 1. Dual-Layer Matrix with Trailing Cursor Wake / Ripple Distortion ---
         const canvas = document.getElementById('binaryCanvas');
         const ctx = canvas.getContext('2d');
 
@@ -304,7 +304,7 @@
         let cols, rows;
         let staticGrid = [];
         let streams = [];
-        let mouse = { x: -1000, y: -1000 };
+        let mouseTrail = []; // Stores recent cursor positions to create the trailing wake
 
         function initMatrix() {
             canvas.width = window.innerWidth;
@@ -320,14 +320,13 @@
                 }
             }
 
-            // Stream objects with slower falling speed and customizable trail lengths
             streams = [];
             for (let c = 0; c < cols; c++) {
                 streams.push({
                     y: Math.random() * -rows,
-                    speed: 0.15 + Math.random() * 0.18, // Smooth slow fall rate
+                    speed: 0.12 + Math.random() * 0.15,
                     trailLength: 6 + Math.floor(Math.random() * 8),
-                    chars: Array.from({ length: rows + 20 }, () => (Math.random() > 0.5 ? '1' : '0'))
+                    chars: Array.from({ length: rows + 30 }, () => (Math.random() > 0.5 ? '1' : '0'))
                 });
             }
         }
@@ -335,30 +334,48 @@
         window.addEventListener('resize', initMatrix);
 
         function drawMatrix() {
-            // Semi-transparent clearing for subtle background persistence
             ctx.fillStyle = '#0b1120';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-
             ctx.font = `${fontSize}px monospace`;
 
-            // Draw Background Unsaturated Grid (Reactive to Cursor)
+            // Decay previous mouse wake points
+            for (let k = mouseTrail.length - 1; k >= 0; k--) {
+                mouseTrail[k].strength *= 0.92; // Gradual fluid dissipation
+                if (mouseTrail[k].strength < 0.02) {
+                    mouseTrail.splice(k, 1);
+                }
+            }
+
+            // Draw Background Unsaturated Grid with cumulative distortion wake
             for (let c = 0; c < cols; c++) {
                 for (let r = 0; r < rows; r++) {
                     let posX = c * fontSize;
                     let posY = (r + 1) * fontSize;
 
-                    const dx = posX - mouse.x;
-                    const dy = posY - mouse.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    const radius = 120;
+                    let totalOffsetX = 0;
+                    let totalOffsetY = 0;
+                    let maxBrightness = 0;
 
-                    if (dist < radius) {
-                        const factor = (1 - dist / radius);
-                        const angle = Math.atan2(dy, dx);
-                        posX += Math.cos(angle) * factor * 12;
-                        posY += Math.sin(angle) * factor * 12;
+                    for (let p of mouseTrail) {
+                        const dx = posX - p.x;
+                        const dy = posY - p.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        const radius = 110;
 
-                        ctx.fillStyle = `rgba(56, 189, 248, ${0.12 + factor * 0.45})`;
+                        if (dist < radius) {
+                            const factor = (1 - dist / radius) * p.strength;
+                            const angle = Math.atan2(dy, dx);
+                            totalOffsetX += Math.cos(angle) * factor * 14;
+                            totalOffsetY += Math.sin(angle) * factor * 14;
+                            maxBrightness = Math.max(maxBrightness, factor);
+                        }
+                    }
+
+                    posX += totalOffsetX;
+                    posY += totalOffsetY;
+
+                    if (maxBrightness > 0) {
+                        ctx.fillStyle = `rgba(56, 189, 248, ${0.04 + maxBrightness * 0.5})`;
                     } else {
                         ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
                     }
@@ -371,7 +388,7 @@
                 }
             }
 
-            // Draw Slow Falling Binary Streams with Multi-Step Gradient Trails
+            // Draw Slow Falling Active Matrix Streams with trailing distortion displacement
             for (let c = 0; c < cols; c++) {
                 const stream = streams[c];
                 const headRow = Math.floor(stream.y);
@@ -382,24 +399,34 @@
                         let posX = c * fontSize;
                         let posY = (row + 1) * fontSize;
 
-                        const dx = posX - mouse.x;
-                        const dy = posY - mouse.y;
-                        const dist = Math.sqrt(dx * dx + dy * dy);
-                        const radius = 120;
+                        let totalOffsetX = 0;
+                        let totalOffsetY = 0;
+                        let maxBrightness = 0;
 
-                        if (dist < radius) {
-                            const factor = (1 - dist / radius);
-                            const angle = Math.atan2(dy, dx);
-                            posX += Math.cos(angle) * factor * 12;
-                            posY += Math.sin(angle) * factor * 12;
+                        for (let p of mouseTrail) {
+                            const dx = posX - p.x;
+                            const dy = posY - p.y;
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+                            const radius = 110;
+
+                            if (dist < radius) {
+                                const factor = (1 - dist / radius) * p.strength;
+                                const angle = Math.atan2(dy, dx);
+                                totalOffsetX += Math.cos(angle) * factor * 14;
+                                totalOffsetY += Math.sin(angle) * factor * 14;
+                                maxBrightness = Math.max(maxBrightness, factor);
+                            }
                         }
 
-                        // Gradient fading from bright head to dark trail
+                        posX += totalOffsetX;
+                        posY += totalOffsetY;
+
                         if (i === 0) {
-                            ctx.fillStyle = dist < radius ? '#ffffff' : '#e0f2fe'; // Leading head
+                            ctx.fillStyle = maxBrightness > 0.3 ? '#ffffff' : '#e0f2fe';
                         } else {
-                            const alpha = Math.max(0.08, (1 - (i / stream.trailLength)) * 0.7);
-                            ctx.fillStyle = `rgba(56, 189, 248, ${alpha})`;
+                            const baseAlpha = Math.max(0.08, (1 - (i / stream.trailLength)) * 0.7);
+                            const boost = maxBrightness * 0.3;
+                            ctx.fillStyle = `rgba(56, 189, 248, ${Math.min(1, baseAlpha + boost)})`;
                         }
 
                         const char = stream.chars[row] || '0';
@@ -407,13 +434,11 @@
                     }
                 }
 
-                // Advance stream at slow rate
                 stream.y += stream.speed;
 
-                // Reset stream when trail goes completely off screen
                 if (stream.y - stream.trailLength > rows) {
                     stream.y = Math.random() * -10;
-                    stream.speed = 0.15 + Math.random() * 0.18;
+                    stream.speed = 0.12 + Math.random() * 0.15;
                     stream.trailLength = 6 + Math.floor(Math.random() * 8);
                 }
             }
@@ -422,20 +447,24 @@
         }
         requestAnimationFrame(drawMatrix);
 
-        // --- 2. Custom Minimal Crosshair Follower ---
+        // --- 2. Custom Minimal Crosshair Follower & Wake Trail Recorder ---
         const dot = document.getElementById('crosshair-dot');
         const lines = document.getElementById('crosshair-lines');
 
         document.addEventListener('mousemove', (e) => {
             const { clientX: x, clientY: y } = e;
-            mouse.x = x;
-            mouse.y = y;
 
             dot.style.left = `${x}px`;
             dot.style.top = `${y}px`;
             
             lines.style.left = `${x}px`;
             lines.style.top = `${y}px`;
+
+            // Push smooth wake points along mouse path
+            mouseTrail.push({ x, y, strength: 1.0 });
+            if (mouseTrail.length > 25) {
+                mouseTrail.shift();
+            }
         });
 
         // Expand crosshair lines when hovering interactive elements
