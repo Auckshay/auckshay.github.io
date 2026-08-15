@@ -44,20 +44,25 @@
         .tilt-card:hover {
             box-shadow: 0 20px 30px -10px rgba(56, 189, 248, 0.15), 0 10px 15px -5px rgba(0, 0, 0, 0.5);
         }
+
+        /* High-contrast blend mode for cursor */
+        .cursor-blend {
+            mix-blend-mode: difference;
+        }
     </style>
 </head>
 <body class="bg-darkBg text-slate-200 font-sans antialiased selection:bg-accent selection:text-slate-900 relative overflow-x-hidden">
 
     <!-- Binary Matrix Background Canvas -->
-    <canvas id="binaryCanvas" class="fixed top-0 left-0 w-full h-full pointer-events-none z-0 opacity-20"></canvas>
+    <canvas id="binaryCanvas" class="fixed top-0 left-0 w-full h-full pointer-events-none z-0"></canvas>
 
-    <!-- Custom Crosshair Cursor -->
-    <div id="crosshair-dot" class="fixed w-1.5 h-1.5 bg-accent rounded-full pointer-events-none z-50 -translate-x-1/2 -translate-y-1/2 hidden md:block"></div>
-    <div id="crosshair-lines" class="fixed w-6 h-6 pointer-events-none z-50 -translate-x-1/2 -translate-y-1/2 hidden md:block transition-transform duration-75 ease-out">
-        <div class="absolute top-1/2 left-0 w-2 h-[1.5px] bg-accent/80 -translate-y-1/2"></div>
-        <div class="absolute top-1/2 right-0 w-2 h-[1.5px] bg-accent/80 -translate-y-1/2"></div>
-        <div class="absolute top-0 left-1/2 w-[1.5px] h-2 bg-accent/80 -translate-x-1/2"></div>
-        <div class="absolute bottom-0 left-1/2 w-[1.5px] h-2 bg-accent/80 -translate-x-1/2"></div>
+    <!-- Custom Crosshair Cursor with High Contrast Blend -->
+    <div id="crosshair-dot" class="fixed w-2 h-2 bg-white rounded-full pointer-events-none z-50 -translate-x-1/2 -translate-y-1/2 hidden md:block cursor-blend"></div>
+    <div id="crosshair-lines" class="fixed w-7 h-7 pointer-events-none z-50 -translate-x-1/2 -translate-y-1/2 hidden md:block transition-transform duration-75 ease-out cursor-blend">
+        <div class="absolute top-1/2 left-0 w-2 h-[2px] bg-white -translate-y-1/2"></div>
+        <div class="absolute top-1/2 right-0 w-2 h-[2px] bg-white -translate-y-1/2"></div>
+        <div class="absolute top-0 left-1/2 w-[2px] h-2 bg-white -translate-x-1/2"></div>
+        <div class="absolute bottom-0 left-1/2 w-[2px] h-2 bg-white -translate-x-1/2"></div>
     </div>
 
     <!-- Navigation Bar -->
@@ -80,7 +85,8 @@
                 <div class="inline-block px-3 py-1 bg-slate-800/80 text-accent rounded-full text-xs font-semibold tracking-wide uppercase border border-slate-700/80 backdrop-blur-sm">
                     Software & Hardware Engineering
                 </div>
-                <h1 class="text-5xl sm:text-6xl md:text-7xl font-extrabold text-white tracking-tight">
+                <!-- Deciphering Name Effect -->
+                <h1 id="scramble-name" data-value="Akshay Rajaram" class="text-5xl sm:text-6xl md:text-7xl font-extrabold text-white tracking-tight font-mono inline-block cursor-default">
                     Akshay Rajaram
                 </h1>
                 <p class="text-lg sm:text-xl text-slate-400 max-w-2xl mx-auto leading-relaxed">
@@ -285,7 +291,7 @@
 
     <!-- JavaScript Animations & Interactivity -->
     <script>
-        // --- 1. Binary Matrix Rain Animation ---
+        // --- 1. Reactive Binary Matrix Rain Canvas ---
         const canvas = document.getElementById('binaryCanvas');
         const ctx = canvas.getContext('2d');
 
@@ -300,6 +306,7 @@
         const fontSize = 14;
         let columns = Math.floor(canvas.width / fontSize);
         let drops = Array(columns).fill(1);
+        let mouse = { x: -1000, y: -1000 };
 
         window.addEventListener('resize', () => {
             columns = Math.floor(canvas.width / fontSize);
@@ -307,15 +314,33 @@
         });
 
         function drawBinary() {
-            ctx.fillStyle = 'rgba(11, 17, 32, 0.1)';
+            ctx.fillStyle = 'rgba(11, 17, 32, 0.15)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            ctx.fillStyle = '#38bdf8';
-            ctx.font = fontSize + 'px monospace';
 
             for (let i = 0; i < drops.length; i++) {
                 const text = chars.charAt(Math.floor(Math.random() * chars.length));
-                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+                let charX = i * fontSize;
+                let charY = drops[i] * fontSize;
+
+                // Check distance from cursor
+                const dx = charX - mouse.x;
+                const dy = charY - mouse.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const radius = 90;
+
+                if (dist < radius) {
+                    // Push characters outward from cursor & highlight
+                    const angle = Math.atan2(dy, dx);
+                    charX += Math.cos(angle) * (radius - dist) * 0.6;
+                    charY += Math.sin(angle) * (radius - dist) * 0.6;
+                    ctx.fillStyle = '#ffffff';
+                    ctx.font = `bold ${fontSize + 2}px monospace`;
+                } else {
+                    ctx.fillStyle = 'rgba(56, 189, 248, 0.35)';
+                    ctx.font = `${fontSize}px monospace`;
+                }
+
+                ctx.fillText(text, charX, charY);
 
                 if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
                     drops[i] = 0;
@@ -331,6 +356,9 @@
 
         document.addEventListener('mousemove', (e) => {
             const { clientX: x, clientY: y } = e;
+            mouse.x = x;
+            mouse.y = y;
+
             dot.style.left = `${x}px`;
             dot.style.top = `${y}px`;
             
@@ -338,8 +366,8 @@
             lines.style.top = `${y}px`;
         });
 
-        // Expand crosshair lines slightly when hovering interactive elements
-        const interactiveElements = document.querySelectorAll('a, button, .tilt-card');
+        // Expand crosshair lines when hovering interactive elements
+        const interactiveElements = document.querySelectorAll('a, button, .tilt-card, #scramble-name');
         interactiveElements.forEach(el => {
             el.addEventListener('mouseenter', () => {
                 lines.style.transform = 'translate(-50%, -50%) scale(1.4)';
@@ -349,7 +377,40 @@
             });
         });
 
-        // --- 3. 3D Depth Card Tilt Effect ---
+        // --- 3. Deciphering Name Scramble Effect ---
+        const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_<>/";
+        const nameElement = document.getElementById("scramble-name");
+
+        function scrambleEffect(element) {
+            let iteration = 0;
+            const originalText = element.dataset.value;
+            clearInterval(element.interval);
+
+            element.interval = setInterval(() => {
+                element.innerText = originalText
+                    .split("")
+                    .map((char, index) => {
+                        if (char === " ") return " ";
+                        if (index < iteration) {
+                            return originalText[index];
+                        }
+                        return letters[Math.floor(Math.random() * letters.length)];
+                    })
+                    .join("");
+
+                if (iteration >= originalText.length) {
+                    clearInterval(element.interval);
+                }
+
+                iteration += 1 / 3;
+            }, 30);
+        }
+
+        // Run deciphering animation on initial load and hover
+        window.addEventListener("DOMContentLoaded", () => scrambleEffect(nameElement));
+        nameElement.addEventListener("mouseover", () => scrambleEffect(nameElement));
+
+        // --- 4. 3D Depth Card Tilt Effect ---
         const tiltCards = document.querySelectorAll('.tilt-card');
 
         tiltCards.forEach(card => {
@@ -361,7 +422,7 @@
                 const centerX = rect.width / 2;
                 const centerY = rect.height / 2;
                 
-                const rotateX = ((y - centerY) / centerY) * -10; // Max 10 deg tilt
+                const rotateX = ((y - centerY) / centerY) * -10;
                 const rotateY = ((x - centerX) / centerX) * 10;
 
                 card.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(10px)`;
