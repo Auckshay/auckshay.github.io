@@ -53,7 +53,7 @@
 </head>
 <body class="bg-darkBg text-slate-200 font-sans antialiased selection:bg-accent selection:text-slate-900 relative overflow-x-hidden">
 
-    <!-- Interactive Dual-Layer Matrix Background Canvas -->
+    <!-- Interactive Trailing Binary Matrix Background Canvas -->
     <canvas id="binaryCanvas" class="fixed top-0 left-0 w-full h-full pointer-events-none z-0"></canvas>
 
     <!-- Custom Crosshair Cursor with High Contrast Blend -->
@@ -296,14 +296,14 @@
 
     <!-- JavaScript Animations & Interactivity -->
     <script>
-        // --- 1. Dual-Layer Interactive Binary Matrix Background ---
+        // --- 1. Slower Falling Binary Matrix with Trail Decay & Cursor Displacement ---
         const canvas = document.getElementById('binaryCanvas');
         const ctx = canvas.getContext('2d');
 
         const fontSize = 16;
         let cols, rows;
         let staticGrid = [];
-        let rainDrops = [];
+        let streams = [];
         let mouse = { x: -1000, y: -1000 };
 
         function initMatrix() {
@@ -320,15 +320,22 @@
                 }
             }
 
-            rainDrops = [];
+            // Stream objects with slower falling speed and customizable trail lengths
+            streams = [];
             for (let c = 0; c < cols; c++) {
-                rainDrops[c] = Math.floor(Math.random() * -rows);
+                streams.push({
+                    y: Math.random() * -rows,
+                    speed: 0.15 + Math.random() * 0.18, // Smooth slow fall rate
+                    trailLength: 6 + Math.floor(Math.random() * 8),
+                    chars: Array.from({ length: rows + 20 }, () => (Math.random() > 0.5 ? '1' : '0'))
+                });
             }
         }
         initMatrix();
         window.addEventListener('resize', initMatrix);
 
         function drawMatrix() {
+            // Semi-transparent clearing for subtle background persistence
             ctx.fillStyle = '#0b1120';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -346,18 +353,16 @@
                     const radius = 120;
 
                     if (dist < radius) {
-                        // Push slightly away & brighten unsaturated digits
                         const factor = (1 - dist / radius);
                         const angle = Math.atan2(dy, dx);
-                        posX += Math.cos(angle) * factor * 14;
-                        posY += Math.sin(angle) * factor * 14;
+                        posX += Math.cos(angle) * factor * 12;
+                        posY += Math.sin(angle) * factor * 12;
 
                         ctx.fillStyle = `rgba(56, 189, 248, ${0.12 + factor * 0.45})`;
                     } else {
                         ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
                     }
 
-                    // Randomly swap occasional bits
                     if (Math.random() > 0.999) {
                         staticGrid[c][r] = staticGrid[c][r] === '1' ? '0' : '1';
                     }
@@ -366,31 +371,51 @@
                 }
             }
 
-            // Draw Active Matrix Rain Drops
+            // Draw Slow Falling Binary Streams with Multi-Step Gradient Trails
             for (let c = 0; c < cols; c++) {
-                const dropRow = rainDrops[c];
-                if (dropRow >= 0 && dropRow < rows) {
-                    let posX = c * fontSize;
-                    let posY = (dropRow + 1) * fontSize;
+                const stream = streams[c];
+                const headRow = Math.floor(stream.y);
 
-                    const dx = posX - mouse.x;
-                    const dy = posY - mouse.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
+                for (let i = 0; i < stream.trailLength; i++) {
+                    const row = headRow - i;
+                    if (row >= 0 && row < rows) {
+                        let posX = c * fontSize;
+                        let posY = (row + 1) * fontSize;
 
-                    if (dist < 120) {
-                        ctx.fillStyle = '#ffffff';
-                    } else {
-                        ctx.fillStyle = 'rgba(56, 189, 248, 0.85)';
+                        const dx = posX - mouse.x;
+                        const dy = posY - mouse.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        const radius = 120;
+
+                        if (dist < radius) {
+                            const factor = (1 - dist / radius);
+                            const angle = Math.atan2(dy, dx);
+                            posX += Math.cos(angle) * factor * 12;
+                            posY += Math.sin(angle) * factor * 12;
+                        }
+
+                        // Gradient fading from bright head to dark trail
+                        if (i === 0) {
+                            ctx.fillStyle = dist < radius ? '#ffffff' : '#e0f2fe'; // Leading head
+                        } else {
+                            const alpha = Math.max(0.08, (1 - (i / stream.trailLength)) * 0.7);
+                            ctx.fillStyle = `rgba(56, 189, 248, ${alpha})`;
+                        }
+
+                        const char = stream.chars[row] || '0';
+                        ctx.fillText(char, posX, posY);
                     }
-
-                    const char = Math.random() > 0.5 ? '1' : '0';
-                    ctx.fillText(char, posX, posY);
                 }
 
-                if (rainDrops[c] * fontSize > canvas.height && Math.random() > 0.975) {
-                    rainDrops[c] = 0;
+                // Advance stream at slow rate
+                stream.y += stream.speed;
+
+                // Reset stream when trail goes completely off screen
+                if (stream.y - stream.trailLength > rows) {
+                    stream.y = Math.random() * -10;
+                    stream.speed = 0.15 + Math.random() * 0.18;
+                    stream.trailLength = 6 + Math.floor(Math.random() * 8);
                 }
-                rainDrops[c]++;
             }
 
             requestAnimationFrame(drawMatrix);
